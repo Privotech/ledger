@@ -9,6 +9,7 @@ import {
   RouterOutlet,
 } from '@angular/router';
 import {
+  CalendarClock,
   LayoutDashboard,
   LucideAngularModule,
   Menu,
@@ -205,6 +206,7 @@ export class AppComponent {
     { path: '/overview', label: 'Overview', icon: LayoutDashboard },
     { path: '/transactions', label: 'Transactions', icon: Receipt },
     { path: '/budgets', label: 'Budgets', icon: SlidersHorizontal },
+    { path: '/recurring', label: 'Recurring', icon: CalendarClock },
     { path: '/analytics', label: 'Analytics', icon: PieChart },
   ];
 
@@ -212,6 +214,7 @@ export class AppComponent {
     const url = this.currentUrl();
     if (url.includes('transactions')) return 'Transactions';
     if (url.includes('budgets')) return 'Budgets';
+    if (url.includes('recurring')) return 'Recurring';
     if (url.includes('analytics')) return 'Analytics';
     return 'Overview';
   });

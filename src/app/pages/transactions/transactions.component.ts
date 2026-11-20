@@ -10,6 +10,7 @@ import {
   Pencil,
   Search,
   Trash2,
+  Upload,
 } from 'lucide-angular';
 import { CategoryId, TransactionStatus, TransactionType } from '../../models/ledger.models';
 import { LedgerService } from '../../services/ledger.service';
@@ -23,7 +24,7 @@ type SortField = 'date' | 'amount' | 'merchant';
   template: `
     <div class="space-y-5">
       <!-- Toolbar & Filters -->
-      <div class="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <div class="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
         <div class="flex flex-wrap items-center gap-3 flex-1">
           <!-- Search -->
           <div class="relative flex-1 min-w-[220px] max-w-sm">
@@ -108,10 +109,24 @@ type SortField = 'date' | 'amount' | 'merchant';
           </select>
         </div>
 
-        <div class="flex items-center gap-3 shrink-0">
-          <span class="text-xs font-mono tabular-nums text-slate-500 dark:text-slate-400 whitespace-nowrap">
+        <div class="flex items-center gap-2.5 shrink-0">
+          <span class="text-xs font-mono tabular-nums text-slate-500 dark:text-slate-400 whitespace-nowrap mr-1">
             {{ filteredTransactions().length }} entries
           </span>
+
+          <label
+            class="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors whitespace-nowrap cursor-pointer"
+          >
+            <lucide-icon [img]="UploadIcon" [size]="14" />
+            <span>Import CSV</span>
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              class="sr-only"
+              (change)="onCsvSelected($event)"
+            />
+          </label>
+
           <button
             type="button"
             (click)="ledger.exportCsv(filteredTransactions())"
@@ -124,13 +139,52 @@ type SortField = 'date' | 'amount' | 'merchant';
         </div>
       </div>
 
+      <!-- Contextual Bulk Action Bar -->
+      @if (selectedCount() > 0) {
+        <div class="rounded-xl bg-white dark:bg-slate-900 border border-teal-600/40 dark:border-teal-500/40 px-5 py-3 flex flex-wrap items-center justify-between gap-4">
+          <span class="text-xs font-medium text-slate-900 dark:text-slate-100 font-mono tabular-nums">
+            {{ selectedCount() }} {{ selectedCount() === 1 ? 'entry' : 'entries' }} selected
+          </span>
+          <div class="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              (click)="bulkStatus('cleared')"
+              class="px-3 py-1.5 text-xs font-medium rounded-md border border-slate-200 dark:border-slate-700 text-emerald-700 dark:text-emerald-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors whitespace-nowrap"
+            >
+              Mark Cleared
+            </button>
+            <button
+              type="button"
+              (click)="bulkStatus('pending')"
+              class="px-3 py-1.5 text-xs font-medium rounded-md border border-slate-200 dark:border-slate-700 text-amber-700 dark:text-amber-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors whitespace-nowrap"
+            >
+              Mark Pending
+            </button>
+            <button
+              type="button"
+              (click)="bulkDelete()"
+              class="px-3 py-1.5 text-xs font-medium rounded-md border border-red-200 dark:border-red-900/60 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors whitespace-nowrap"
+            >
+              Delete Selected
+            </button>
+            <button
+              type="button"
+              (click)="clearSelection()"
+              class="px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 whitespace-nowrap"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      }
+
       <!-- Data Table -->
       <div class="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 overflow-hidden">
         @if (filteredTransactions().length === 0) {
           <div class="p-12 text-center">
             <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">No matching ledger entries</h3>
             <p class="mt-1 text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-              Adjust your search terms or filters, or log a new transaction for this period.
+              Adjust your search terms or filters, import a CSV statement, or log a new transaction.
             </p>
             <div class="mt-5 flex items-center justify-center gap-3">
               @if (hasActiveFilters()) {
@@ -156,7 +210,16 @@ type SortField = 'date' | 'amount' | 'merchant';
             <table class="w-full text-left border-collapse">
               <thead>
                 <tr class="border-b border-slate-200 dark:border-slate-800 text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                  <th class="py-3 pl-6 pr-3">
+                  <th class="py-3 pl-6 pr-2 w-8">
+                    <input
+                      type="checkbox"
+                      [checked]="allVisibleSelected()"
+                      (change)="toggleSelectAll()"
+                      aria-label="Select all visible transactions"
+                      class="rounded border-slate-300 dark:border-slate-700 accent-teal-600 cursor-pointer"
+                    />
+                  </th>
+                  <th class="py-3 px-3">
                     <button
                       type="button"
                       (click)="toggleSort('date')"
@@ -194,7 +257,16 @@ type SortField = 'date' | 'amount' | 'merchant';
               <tbody class="divide-y divide-slate-100 dark:divide-slate-800/80 text-sm">
                 @for (tx of filteredTransactions(); track tx.id) {
                   <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
-                    <td class="py-3 pl-6 pr-3 font-mono tabular-nums text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                    <td class="py-3 pl-6 pr-2">
+                      <input
+                        type="checkbox"
+                        [checked]="isSelected(tx.id)"
+                        (change)="toggleRowSelection(tx.id)"
+                        [attr.aria-label]="'Select ' + tx.description"
+                        class="rounded border-slate-300 dark:border-slate-700 accent-teal-600 cursor-pointer"
+                      />
+                    </td>
+                    <td class="py-3 px-3 font-mono tabular-nums text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
                       {{ tx.date | date:'yyyy-MM-dd' }}
                     </td>
                     <td class="py-3 px-3">
@@ -292,6 +364,7 @@ export class TransactionsComponent {
 
   readonly SearchIcon = Search;
   readonly DownloadIcon = Download;
+  readonly UploadIcon = Upload;
   readonly ArrowDownUpIcon = ArrowDownUp;
   readonly PencilIcon = Pencil;
   readonly Trash2Icon = Trash2;
@@ -304,6 +377,7 @@ export class TransactionsComponent {
   readonly statusFilter = signal<'all' | TransactionStatus>('all');
   readonly sortField = signal<SortField>('date');
   readonly sortDir = signal<'asc' | 'desc'>('desc');
+  readonly selectedIds = signal<Set<string>>(new Set());
 
   readonly hasActiveFilters = computed(
     () =>
@@ -350,6 +424,67 @@ export class TransactionsComponent {
     const expenses = list.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
     return { income, expenses, net: income - expenses };
   });
+
+  readonly selectedCount = computed(() => this.selectedIds().size);
+
+  readonly allVisibleSelected = computed(() => {
+    const visible = this.filteredTransactions();
+    const sel = this.selectedIds();
+    return visible.length > 0 && visible.every((tx) => sel.has(tx.id));
+  });
+
+  isSelected(id: string): boolean {
+    return this.selectedIds().has(id);
+  }
+
+  toggleRowSelection(id: string): void {
+    this.selectedIds.update((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  toggleSelectAll(): void {
+    if (this.allVisibleSelected()) {
+      this.clearSelection();
+    } else {
+      this.selectedIds.set(new Set(this.filteredTransactions().map((tx) => tx.id)));
+    }
+  }
+
+  clearSelection(): void {
+    this.selectedIds.set(new Set());
+  }
+
+  bulkStatus(status: TransactionStatus): void {
+    this.ledger.bulkUpdateStatus(this.selectedIds(), status);
+    this.clearSelection();
+  }
+
+  bulkDelete(): void {
+    this.ledger.bulkDeleteTransactions(this.selectedIds());
+    this.clearSelection();
+  }
+
+  onCsvSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        const count = this.ledger.importCsvText(reader.result);
+        if (count === 0) {
+          this.ledger.showToast('No valid rows found in CSV');
+        }
+      }
+      input.value = '';
+    };
+    reader.readAsText(file);
+  }
 
   toggleSort(field: SortField): void {
     if (this.sortField() === field) {

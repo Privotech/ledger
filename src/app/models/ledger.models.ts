@@ -1,5 +1,6 @@
 export type TransactionType = 'income' | 'expense';
 export type TransactionStatus = 'cleared' | 'pending';
+export type RecurringCadence = 'monthly' | 'quarterly' | 'annual';
 
 export type CategoryId =
   | 'housing'
@@ -48,9 +49,29 @@ export interface BudgetSummary {
 
 export interface MonthlySummary {
   monthKey: string; // YYYY-MM
-  label: string;    // e.g. "Nov 2026"
-  shortLabel: string; // e.g. "Nov"
+  label: string;
+  shortLabel: string;
   income: number;
   expenses: number;
   net: number;
+}
+
+export interface RecurringItem {
+  id: string;
+  merchant: string;
+  description: string;
+  category: CategoryId;
+  type: TransactionType;
+  amount: number;
+  cadence: RecurringCadence;
+  nextDueDate: string; // YYYY-MM-DD
+  active: boolean;
+}
+
+export interface SavingsGoal {
+  id: string;
+  name: string;
+  targetAmount: number;
+  currentAmount: number;
+  targetDate: string; // YYYY-MM-DD
 }

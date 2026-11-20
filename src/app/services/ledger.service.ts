@@ -5,8 +5,12 @@ import {
   CategoryId,
   CategoryMeta,
   MonthlySummary,
+  RecurringCadence,
+  RecurringItem,
+  SavingsGoal,
   Transaction,
   TransactionStatus,
+  TransactionType,
 } from '../models/ledger.models';
 
 export const CATEGORIES: CategoryMeta[] = [
@@ -29,8 +33,100 @@ const INITIAL_BUDGETS: BudgetAllocation[] = [
   { category: 'studio', monthlyLimit: 650 },
 ];
 
+const INITIAL_RECURRING: RecurringItem[] = [
+  {
+    id: 'rec-1',
+    merchant: 'Northstar Logistics',
+    description: 'Q4 Design Systems Retainer',
+    category: 'client',
+    type: 'income',
+    amount: 5400,
+    cadence: 'monthly',
+    nextDueDate: '2026-12-01',
+    active: true,
+  },
+  {
+    id: 'rec-2',
+    merchant: 'Mercer Property Group',
+    description: 'Studio Lease & Common Charges',
+    category: 'housing',
+    type: 'expense',
+    amount: 2250,
+    cadence: 'monthly',
+    nextDueDate: '2026-12-01',
+    active: true,
+  },
+  {
+    id: 'rec-3',
+    merchant: 'Google Cloud Platform',
+    description: 'Cloud Compute & Postgres Cluster',
+    category: 'software',
+    type: 'expense',
+    amount: 285,
+    cadence: 'monthly',
+    nextDueDate: '2026-11-30',
+    active: true,
+  },
+  {
+    id: 'rec-4',
+    merchant: 'Figma Inc.',
+    description: 'Figma & Linear Team Seats',
+    category: 'software',
+    type: 'expense',
+    amount: 145,
+    cadence: 'monthly',
+    nextDueDate: '2026-12-03',
+    active: true,
+  },
+  {
+    id: 'rec-5',
+    merchant: 'Sonic Fiber',
+    description: 'Symmetric Gigabit Fiber',
+    category: 'utilities',
+    type: 'expense',
+    amount: 118,
+    cadence: 'monthly',
+    nextDueDate: '2026-12-05',
+    active: true,
+  },
+  {
+    id: 'rec-6',
+    merchant: 'JetBrains & Domains',
+    description: 'Annual Developer Licenses & DNS',
+    category: 'software',
+    type: 'expense',
+    amount: 360,
+    cadence: 'annual',
+    nextDueDate: '2027-01-15',
+    active: true,
+  },
+];
+
+const INITIAL_GOALS: SavingsGoal[] = [
+  {
+    id: 'goal-1',
+    name: 'Q4 Estimated Tax Reserve',
+    targetAmount: 12000,
+    currentAmount: 8400,
+    targetDate: '2027-01-15',
+  },
+  {
+    id: 'goal-2',
+    name: '6-Month Operating Buffer',
+    targetAmount: 24000,
+    currentAmount: 16500,
+    targetDate: '2027-06-01',
+  },
+  {
+    id: 'goal-3',
+    name: 'Studio Display & Audio Upgrade',
+    targetAmount: 3200,
+    currentAmount: 2150,
+    targetDate: '2026-12-20',
+  },
+];
+
 const INITIAL_TRANSACTIONS: Transaction[] = [
-  // November 2026
   {
     id: 'tx-1101',
     date: '2026-11-18',
@@ -143,7 +239,6 @@ const INITIAL_TRANSACTIONS: Transaction[] = [
     amount: 129.2,
     status: 'pending',
   },
-  // October 2026
   {
     id: 'tx-1001',
     date: '2026-10-24',
@@ -214,7 +309,6 @@ const INITIAL_TRANSACTIONS: Transaction[] = [
     amount: 234,
     status: 'cleared',
   },
-  // September 2026
   {
     id: 'tx-0901',
     date: '2026-09-22',
@@ -275,7 +369,6 @@ const INITIAL_TRANSACTIONS: Transaction[] = [
     amount: 420,
     status: 'cleared',
   },
-  // August 2026
   {
     id: 'tx-0801',
     date: '2026-08-25',
@@ -330,14 +423,20 @@ const INITIAL_TRANSACTIONS: Transaction[] = [
 
 const STORAGE_TX_KEY = 'clearledger_v1_transactions';
 const STORAGE_BUDGET_KEY = 'clearledger_v1_budgets';
+const STORAGE_RECURRING_KEY = 'clearledger_v1_recurring';
+const STORAGE_GOALS_KEY = 'clearledger_v1_goals';
 const STORAGE_THEME_KEY = 'clearledger_v1_theme';
 
 @Injectable({ providedIn: 'root' })
 export class LedgerService {
   readonly categories = CATEGORIES;
 
-  readonly transactions = signal<Transaction[]>(this.loadTransactions());
-  readonly budgets = signal<BudgetAllocation[]>(this.loadBudgets());
+  readonly transactions = signal<Transaction[]>(this.loadJson(STORAGE_TX_KEY, INITIAL_TRANSACTIONS));
+  readonly budgets = signal<BudgetAllocation[]>(this.loadJson(STORAGE_BUDGET_KEY, INITIAL_BUDGETS));
+  readonly recurringItems = signal<RecurringItem[]>(
+    this.loadJson(STORAGE_RECURRING_KEY, INITIAL_RECURRING)
+  );
+  readonly savingsGoals = signal<SavingsGoal[]>(this.loadJson(STORAGE_GOALS_KEY, INITIAL_GOALS));
   readonly selectedMonth = signal<string>('2026-11');
   readonly darkMode = signal<boolean>(this.loadTheme());
 
@@ -348,28 +447,17 @@ export class LedgerService {
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
-    effect(() => {
-      try {
-        localStorage.setItem(STORAGE_TX_KEY, JSON.stringify(this.transactions()));
-      } catch {
-        // Ignore storage quota errors
-      }
-    });
-
-    effect(() => {
-      try {
-        localStorage.setItem(STORAGE_BUDGET_KEY, JSON.stringify(this.budgets()));
-      } catch {
-        // Ignore storage quota errors
-      }
-    });
+    effect(() => this.saveJson(STORAGE_TX_KEY, this.transactions()));
+    effect(() => this.saveJson(STORAGE_BUDGET_KEY, this.budgets()));
+    effect(() => this.saveJson(STORAGE_RECURRING_KEY, this.recurringItems()));
+    effect(() => this.saveJson(STORAGE_GOALS_KEY, this.savingsGoals()));
 
     effect(() => {
       const isDark = this.darkMode();
       try {
         localStorage.setItem(STORAGE_THEME_KEY, isDark ? 'dark' : 'light');
       } catch {
-        // Ignore storage quota errors
+        // Ignore storage errors
       }
       if (typeof document !== 'undefined') {
         document.documentElement.classList.toggle('dark', isDark);
@@ -499,7 +587,10 @@ export class LedgerService {
 
   readonly topMerchants = computed(() => {
     const expenses = this.scopedTransactions().filter((tx) => tx.type === 'expense');
-    const grouped = new Map<string, { merchant: string; count: number; total: number; category: CategoryId }>();
+    const grouped = new Map<
+      string,
+      { merchant: string; count: number; total: number; category: CategoryId }
+    >();
 
     for (const tx of expenses) {
       const existing = grouped.get(tx.merchant);
@@ -517,6 +608,40 @@ export class LedgerService {
     }
 
     return Array.from(grouped.values()).sort((a, b) => b.total - a.total);
+  });
+
+  readonly recurringMetrics = computed(() => {
+    const active = this.recurringItems().filter((r) => r.active);
+    const toMonthly = (item: RecurringItem) => {
+      if (item.cadence === 'quarterly') return item.amount / 3;
+      if (item.cadence === 'annual') return item.amount / 12;
+      return item.amount;
+    };
+
+    const monthlyInflow = active
+      .filter((r) => r.type === 'income')
+      .reduce((s, r) => s + toMonthly(r), 0);
+    const monthlyBurn = active
+      .filter((r) => r.type === 'expense')
+      .reduce((s, r) => s + toMonthly(r), 0);
+
+    return {
+      activeCount: active.length,
+      monthlyInflow: Math.round(monthlyInflow * 100) / 100,
+      monthlyBurn: Math.round(monthlyBurn * 100) / 100,
+      netBaseline: Math.round((monthlyInflow - monthlyBurn) * 100) / 100,
+    };
+  });
+
+  readonly totalGoalsSummary = computed(() => {
+    const goals = this.savingsGoals();
+    const target = goals.reduce((s, g) => s + g.targetAmount, 0);
+    const saved = goals.reduce((s, g) => s + g.currentAmount, 0);
+    return {
+      target,
+      saved,
+      percent: target > 0 ? Math.min(100, Math.round((saved / target) * 100)) : 0,
+    };
   });
 
   getCategoryMeta(id: CategoryId): CategoryMeta {
@@ -548,7 +673,7 @@ export class LedgerService {
   addTransaction(input: Omit<Transaction, 'id'>): void {
     const newTx: Transaction = {
       ...input,
-      id: `tx-${Date.now().toString(36)}`,
+      id: `tx-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`,
     };
     this.transactions.update((list) => [newTx, ...list]);
     this.showToast(`Recorded "${newTx.description}"`);
@@ -571,12 +696,26 @@ export class LedgerService {
     );
   }
 
+  bulkUpdateStatus(ids: Set<string>, status: TransactionStatus): void {
+    if (ids.size === 0) return;
+    this.transactions.update((list) =>
+      list.map((tx) => (ids.has(tx.id) ? { ...tx, status } : tx))
+    );
+    this.showToast(`Marked ${ids.size} entries as ${status}`);
+  }
+
   deleteTransaction(id: string): void {
     const target = this.transactions().find((tx) => tx.id === id);
     this.transactions.update((list) => list.filter((tx) => tx.id !== id));
     if (target) {
       this.showToast(`Removed "${target.description}"`);
     }
+  }
+
+  bulkDeleteTransactions(ids: Set<string>): void {
+    if (ids.size === 0) return;
+    this.transactions.update((list) => list.filter((tx) => !ids.has(tx.id)));
+    this.showToast(`Deleted ${ids.size} selected entries`);
   }
 
   updateBudgetLimit(category: CategoryId, monthlyLimit: number): void {
@@ -586,6 +725,129 @@ export class LedgerService {
     );
   }
 
+  addRecurringItem(input: Omit<RecurringItem, 'id'>): void {
+    const item: RecurringItem = {
+      ...input,
+      id: `rec-${Date.now().toString(36)}`,
+    };
+    this.recurringItems.update((list) => [item, ...list]);
+    this.showToast(`Added recurring schedule for ${item.merchant}`);
+  }
+
+  toggleRecurringActive(id: string): void {
+    this.recurringItems.update((list) =>
+      list.map((r) => (r.id === id ? { ...r, active: !r.active } : r))
+    );
+  }
+
+  deleteRecurringItem(id: string): void {
+    this.recurringItems.update((list) => list.filter((r) => r.id !== id));
+    this.showToast('Recurring schedule removed');
+  }
+
+  postRecurringToLedger(item: RecurringItem): void {
+    const activePeriod = this.selectedMonth() === 'all' ? '2026-11' : this.selectedMonth();
+    const dayPart = item.nextDueDate.slice(8, 10) || '20';
+    const postDate = `${activePeriod}-${dayPart}`;
+
+    this.addTransaction({
+      date: postDate,
+      merchant: item.merchant,
+      description: item.description,
+      category: item.category,
+      type: item.type,
+      amount: item.amount,
+      status: 'cleared',
+      notes: `Posted from ${item.cadence} schedule`,
+    });
+
+    const nextDue = this.advanceDate(item.nextDueDate, item.cadence);
+    this.recurringItems.update((list) =>
+      list.map((r) => (r.id === item.id ? { ...r, nextDueDate: nextDue } : r))
+    );
+  }
+
+  addSavingsGoal(input: Omit<SavingsGoal, 'id'>): void {
+    const goal: SavingsGoal = {
+      ...input,
+      id: `goal-${Date.now().toString(36)}`,
+    };
+    this.savingsGoals.update((list) => [...list, goal]);
+    this.showToast(`Created reserve goal "${goal.name}"`);
+  }
+
+  contributeToGoal(id: string, delta: number): void {
+    this.savingsGoals.update((list) =>
+      list.map((g) =>
+        g.id === id ? { ...g, currentAmount: Math.max(0, g.currentAmount + delta) } : g
+      )
+    );
+    const goal = this.savingsGoals().find((g) => g.id === id);
+    if (goal && delta > 0) {
+      this.showToast(`Allocated $${delta.toLocaleString()} to ${goal.name}`);
+    }
+  }
+
+  deleteSavingsGoal(id: string): void {
+    this.savingsGoals.update((list) => list.filter((g) => g.id !== id));
+    this.showToast('Reserve goal removed');
+  }
+
+  importCsvText(csvText: string): number {
+    const lines = csvText
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+    if (lines.length < 2) return 0;
+
+    const imported: Transaction[] = [];
+    for (let i = 1; i < lines.length; i++) {
+      const cols = this.parseCsvLine(lines[i]);
+      if (cols.length < 4) continue;
+
+      const rawDate = /^\d{4}-\d{2}-\d{2}$/.test(cols[1]) ? cols[1] : '2026-11-20';
+      const merchant = (cols[2] || cols[0] || 'Imported Merchant').trim();
+      const description = (cols[3] || merchant).trim();
+      const rawType = (cols[5] || '').toLowerCase();
+      const rawAmount = parseFloat((cols[7] || cols[4] || '0').replace(/[^0-9.-]/g, ''));
+      if (Number.isNaN(rawAmount) || rawAmount === 0) continue;
+
+      const type: TransactionType =
+        rawType === 'income' || rawAmount > 0 && rawType !== 'expense' && cols[5] === 'income'
+          ? 'income'
+          : rawAmount > 0 && rawType === ''
+            ? 'income'
+            : 'expense';
+
+      const status: TransactionStatus =
+        (cols[6] || '').toLowerCase() === 'pending' ? 'pending' : 'cleared';
+
+      const matchedCat = this.categories.find(
+        (c) => c.label.toLowerCase() === (cols[4] || '').toLowerCase() || c.id === cols[4]
+      );
+      const category: CategoryId =
+        matchedCat?.id ?? (type === 'income' ? 'client' : 'software');
+
+      imported.push({
+        id: `tx-imp-${Date.now().toString(36)}-${i}`,
+        date: rawDate,
+        merchant,
+        description,
+        category,
+        type,
+        amount: Math.round(Math.abs(rawAmount) * 100) / 100,
+        status,
+        notes: cols[8]?.trim() || 'Imported via CSV',
+      });
+    }
+
+    if (imported.length > 0) {
+      this.transactions.update((list) => [...imported, ...list]);
+      this.showToast(`Imported ${imported.length} ledger entries`);
+    }
+    return imported.length;
+  }
+
   toggleTheme(): void {
     this.darkMode.update((v) => !v);
   }
@@ -593,12 +855,24 @@ export class LedgerService {
   resetDemoData(): void {
     this.transactions.set(INITIAL_TRANSACTIONS);
     this.budgets.set(INITIAL_BUDGETS);
+    this.recurringItems.set(INITIAL_RECURRING);
+    this.savingsGoals.set(INITIAL_GOALS);
     this.selectedMonth.set('2026-11');
     this.showToast('Sample ledger restored');
   }
 
   exportCsv(rows: Transaction[]): void {
-    const headers = ['ID', 'Date', 'Merchant', 'Description', 'Category', 'Type', 'Status', 'Amount', 'Notes'];
+    const headers = [
+      'ID',
+      'Date',
+      'Merchant',
+      'Description',
+      'Category',
+      'Type',
+      'Status',
+      'Amount',
+      'Notes',
+    ];
     const escapeCell = (val: string | number | undefined) => {
       const str = String(val ?? '');
       if (str.includes(',') || str.includes('"') || str.includes('\n')) {
@@ -648,6 +922,40 @@ export class LedgerService {
     }, 3200);
   }
 
+  private advanceDate(dateStr: string, cadence: RecurringCadence): string {
+    const d = new Date(`${dateStr}T00:00:00`);
+    if (Number.isNaN(d.getTime())) return dateStr;
+    if (cadence === 'monthly') d.setMonth(d.getMonth() + 1);
+    else if (cadence === 'quarterly') d.setMonth(d.getMonth() + 3);
+    else d.setFullYear(d.getFullYear() + 1);
+    return d.toISOString().slice(0, 10);
+  }
+
+  private parseCsvLine(line: string): string[] {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        result.push(current);
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    result.push(current);
+    return result;
+  }
+
   private formatMonthLabel(monthKey: string): string {
     const [year, month] = monthKey.split('-').map(Number);
     if (!year || !month) return monthKey;
@@ -662,30 +970,25 @@ export class LedgerService {
     return date.toLocaleDateString('en-US', { month: 'short' });
   }
 
-  private loadTransactions(): Transaction[] {
+  private loadJson<T>(key: string, fallback: T): T {
     try {
-      const raw = localStorage.getItem(STORAGE_TX_KEY);
+      const raw = localStorage.getItem(key);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) return parsed as T;
       }
     } catch {
-      // Fallback to initial seed
+      // Fallback
     }
-    return INITIAL_TRANSACTIONS;
+    return fallback;
   }
 
-  private loadBudgets(): BudgetAllocation[] {
+  private saveJson(key: string, value: unknown): void {
     try {
-      const raw = localStorage.getItem(STORAGE_BUDGET_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
+      localStorage.setItem(key, JSON.stringify(value));
     } catch {
-      // Fallback to initial seed
+      // Ignore storage quota errors
     }
-    return INITIAL_BUDGETS;
   }
 
   private loadTheme(): boolean {
