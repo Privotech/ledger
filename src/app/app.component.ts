@@ -57,7 +57,7 @@ import { LedgerService } from './services/ledger.service';
           <!-- Brand Wordmark -->
           <div class="h-16 px-6 flex items-center justify-between border-b border-slate-200 dark:border-slate-800">
             <a
-              routerLink="/overview"
+              routerLink="/dashboard"
               class="text-lg font-bold tracking-tight font-display text-slate-900 dark:text-slate-100 whitespace-nowrap shrink-0"
             >
               ClearLedger
@@ -203,7 +203,7 @@ export class AppComponent {
   readonly RotateCcwIcon = RotateCcw;
 
   readonly navItems = [
-    { path: '/overview', label: 'Overview', icon: LayoutDashboard },
+    { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/transactions', label: 'Transactions', icon: Receipt },
     { path: '/budgets', label: 'Budgets', icon: SlidersHorizontal },
     { path: '/recurring', label: 'Recurring', icon: CalendarClock },
@@ -216,7 +216,7 @@ export class AppComponent {
     if (url.includes('budgets')) return 'Budgets';
     if (url.includes('recurring')) return 'Recurring';
     if (url.includes('analytics')) return 'Analytics';
-    return 'Overview';
+    return 'Dashboard';
   });
 
   constructor() {

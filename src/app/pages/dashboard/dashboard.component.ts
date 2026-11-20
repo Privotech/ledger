@@ -1,9 +1,11 @@
 import { CommonModule, CurrencyPipe, DatePipe } from '@angular/common';
-import { Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import {
   AlertCircle,
+  ArrowDownRight,
   ArrowRight,
+  ArrowUpRight,
   CheckCircle2,
   Clock,
   LucideAngularModule,
@@ -13,13 +15,47 @@ import { CashflowChartComponent } from '../../components/cashflow-chart/cashflow
 import { LedgerService } from '../../services/ledger.service';
 
 @Component({
-  selector: 'app-overview',
+  selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, CurrencyPipe, DatePipe, RouterLink, LucideAngularModule, CashflowChartComponent],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [
+    CommonModule,
+    CurrencyPipe,
+    DatePipe,
+    RouterLink,
+    LucideAngularModule,
+    CashflowChartComponent,
+  ],
   template: `
     <div class="space-y-6">
-      <!-- 4-Column KPI Strip -->
-      <section aria-label="Cashflow key metrics" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <!-- Income & Expenses Summary Strip -->
+      <section aria-label="Income and expenses summary" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div class="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Total Income</span>
+            <lucide-icon [img]="ArrowUpRightIcon" [size]="15" class="text-emerald-600 dark:text-emerald-400" />
+          </div>
+          <div class="mt-2 text-2xl font-semibold font-mono tabular-nums tracking-tight text-emerald-700 dark:text-emerald-400">
+            {{ ledger.totalIncome() | currency:'USD':'symbol':'1.2-2' }}
+          </div>
+          <div class="mt-2 text-xs text-slate-500 dark:text-slate-400 font-mono tabular-nums">
+            {{ incomeCount() }} inflow entries · {{ ledger.recurringMetrics().monthlyInflow | currency:'USD':'symbol':'1.0-0' }}/mo recurring
+          </div>
+        </div>
+
+        <div class="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Total Expenses</span>
+            <lucide-icon [img]="ArrowDownRightIcon" [size]="15" class="text-slate-500 dark:text-slate-400" />
+          </div>
+          <div class="mt-2 text-2xl font-semibold font-mono tabular-nums tracking-tight text-slate-900 dark:text-slate-100">
+            {{ ledger.totalExpenses() | currency:'USD':'symbol':'1.2-2' }}
+          </div>
+          <div class="mt-2 text-xs text-slate-500 dark:text-slate-400 font-mono tabular-nums">
+            {{ expenseCount() }} outflow entries · {{ ledger.pendingSummary().count }} pending
+          </div>
+        </div>
+
         <div class="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5">
           <div class="text-xs font-medium text-slate-500 dark:text-slate-400">Net Cashflow</div>
           <div
@@ -33,27 +69,7 @@ import { LedgerService } from '../../services/ledger.service';
             {{ ledger.netCashflow() | currency:'USD':'symbol':'1.2-2' }}
           </div>
           <div class="mt-2 text-xs text-slate-500 dark:text-slate-400 font-mono tabular-nums">
-            {{ ledger.scopedTransactions().length }} entries in period
-          </div>
-        </div>
-
-        <div class="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5">
-          <div class="text-xs font-medium text-slate-500 dark:text-slate-400">Total Income</div>
-          <div class="mt-2 text-2xl font-semibold font-mono tabular-nums tracking-tight text-emerald-700 dark:text-emerald-400">
-            {{ ledger.totalIncome() | currency:'USD':'symbol':'1.2-2' }}
-          </div>
-          <div class="mt-2 text-xs text-slate-500 dark:text-slate-400 font-mono tabular-nums">
-            Recurring baseline: {{ ledger.recurringMetrics().monthlyInflow | currency:'USD':'symbol':'1.0-0' }}/mo
-          </div>
-        </div>
-
-        <div class="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5">
-          <div class="text-xs font-medium text-slate-500 dark:text-slate-400">Operating Expenses</div>
-          <div class="mt-2 text-2xl font-semibold font-mono tabular-nums tracking-tight text-slate-900 dark:text-slate-100">
-            {{ ledger.totalExpenses() | currency:'USD':'symbol':'1.2-2' }}
-          </div>
-          <div class="mt-2 text-xs text-slate-500 dark:text-slate-400 font-mono tabular-nums">
-            {{ ledger.pendingSummary().count }} pending ({{ ledger.pendingSummary().amount | currency:'USD':'symbol':'1.0-0' }})
+            {{ ledger.scopedTransactions().length }} total entries in period
           </div>
         </div>
 
@@ -293,15 +309,25 @@ import { LedgerService } from '../../services/ledger.service';
     </div>
   `,
 })
-export class OverviewComponent {
+export class DashboardComponent {
   readonly ledger = inject(LedgerService);
   readonly Math = Math;
 
   readonly ArrowRightIcon = ArrowRight;
+  readonly ArrowUpRightIcon = ArrowUpRight;
+  readonly ArrowDownRightIcon = ArrowDownRight;
   readonly AlertCircleIcon = AlertCircle;
   readonly CheckCircle2Icon = CheckCircle2;
   readonly ClockIcon = Clock;
   readonly SendIcon = Send;
+
+  readonly incomeCount = computed(
+    () => this.ledger.scopedTransactions().filter((tx) => tx.type === 'income').length
+  );
+
+  readonly expenseCount = computed(
+    () => this.ledger.scopedTransactions().filter((tx) => tx.type === 'expense').length
+  );
 
   readonly recentTransactions = computed(() => this.ledger.scopedTransactions().slice(0, 6));
 
